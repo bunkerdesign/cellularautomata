@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Cell Evolution</title>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/3.1.1/svg.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #000;
+      font-family: 'Source Code Pro', monospace;
+    }
+
+    #output {
+      margin-bottom: 10px;
+    }
+
+    #buttons {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding-left: 20px;
+    }
+
+    #generateButton,
+    #saveButton {
+      padding: 10px;
+      font-size: 16px;
+      background-color: #fff;
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin: 10px 0;
+      width: 120px;
+      font-family: 'Source Code Pro', monospace;
+    }
+
+    .inputField {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+
+    .inputField label {
+      margin-right: 10px;
+      color: #fff;
+      font-size: 16px;
+      width: 80px;
+    }
+
+    .inputField input[type="number"] {
+      padding: 10px;
+      width: 80px;
+      border-radius: 10px;
+      -webkit-appearance: none;
+      -moz-appearance: textfield;
+    }
+
+    #canvasSize {
+      font-family: 'Source Code Pro', monospace;
+      font-size: 10px;
+      color: #fff;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="output"></div>
+  <div id="buttons">
+    <div class="inputField">
+      <label for="widthInput">Width:</label>
+      <input type="number" id="widthInput" value="500">
+    </div>
+    <div class="inputField">
+      <label for="heightInput">Height:</label>
+      <input type="number" id="heightInput" value="500">
+    </div>
+    <div class="inputField">
+      <label for="squareSizeInput">Square Size:</label>
+      <input type="number" id="squareSizeInput" value="10">
+    </div>
+    <button id="generateButton">Generate</button>
+    <button id="saveButton">Save SVG</button>
+    <div id="canvasSize"></div>
+  </div>
+
+  <script>
+    var widthInput = document.getElementById('widthInput');
+    var heightInput = document.getElementById('heightInput');
+    var squareSizeInput = document.getElementById('squareSizeInput');
+    var output = document.getElementById('output');
+    var generateButton = document.getElementById('generateButton');
+    var saveButton = document.getElementById('saveButton');
+    var canvasSize = document.getElementById('canvasSize');
+
+    var width, height, squareSize;
+    var svg;
+    var colors = ['000', 'fff'];
+
+    function getRandomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function get_bit(num, pos) {
+      return (num >> pos) & 1;
+    }
+
+    // Combines 3 bits into an integer between 0 and 7
+    function combine(b1, b2, b3) {
+      return (b1 << 2) + (b2 << 1) + (b3 << 0);
+    }
+
+    // Returns given number in the form of a tertiary function (a rule)
+    function get_rule(num) {
+      return function(b1, b2, b3) {
+        return get_bit(num, combine(b1, b2, b3));
+      };
+    }
+
+    function draw_rule(svg, rule, scale, width, height) {
+      let row = random_initial_row(width);
+      for (let i = 0; i < height; i++) {
+        draw_row(svg, row, scale);
+        row = next_row(row, rule);
+      }
+    }
+
+    function draw_row(svg, row, scale) {
+      row.forEach((cell, index) => {
+        var rect = svg.rect(scale, scale).move(index * scale, svg.y());
+        rect.fill(cell === 1 ? '#' + colors[0] : '#' + colors[1]);
+      });
+      svg.y(svg.y() + scale);
+    }
+
+    function next_row(old, rule) {
+      return old.map((_, i) => rule(old[i - 1], old[i], old[i + 1]));
+    }
+
+    function random_initial_row(width) {
+      return Array.from(Array(width), _ => Math.floor(Math.random() * 2));
+    }
+
+    function generate() {
+      width = parseInt(widthInput.value);
+      height = parseInt(heightInput.value);
+      squareSize = parseInt(squareSizeInput.value);
+
+      output.innerHTML = '';
+
+      var cells_across = Math.floor(width / squareSize); // Adjust cells_across based on width
+      var cell_scale = squareSize;
+      var cells_down = Math.floor(height / squareSize);
+
+      var rule = get_rule(getRandomInt(0, 255)); // Generate a new random rule
+      svg = SVG().addTo('#output').size(width, height);
+      draw_rule(svg, rule, cell_scale, cells_across, cells_down);
+
+      // Trim canvas to fit generated image
+      var newCanvasWidth = cells_across * cell_scale;
+      var newCanvasHeight = cells_down * cell_scale;
+      svg.viewbox(0, 0, newCanvasWidth, newCanvasHeight);
+
+      // Display new size under "Save SVG" button
+      canvasSize.textContent = 'Canvas Size: ' + newCanvasWidth + 'x' + newCanvasHeight;
+    }
+
+	function saveSVG() {
+	  var timestamp = new Date().toISOString().replace(/[-:.]/g, '');
+	  var filename = timestamp + '_cellevolution.svg';
+
+	  // Get the bounding box of the generated image
+	  var bbox = svg.bbox();
+
+	  // Create a new SVG for the trimmed image
+	  var trimmedSvg = SVG().size(bbox.width, bbox.height);
+	  svg.each(function () {
+	    var clone = this.clone();
+	    trimmedSvg.add(clone);
+	  });
+
+	  // Save trimmed SVG as "filename"
+	  var svgData = trimmedSvg.svg();
+	  var blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+	  var url = URL.createObjectURL(blob);
+
+	  var link = document.createElement('a');
+	  link.href = url;
+	  link.download = filename;
+	  link.click();
+
+	  URL.revokeObjectURL(url);
+	}
+
+	function intersectRect(rect1, rect2) {
+	  var x1 = Math.max(rect1.x(), rect2.x());
+	  var y1 = Math.max(rect1.y(), rect2.y());
+	  var x2 = Math.min(rect1.x() + rect1.width(), rect2.x() + rect2.width());
+	  var y2 = Math.min(rect1.y() + rect1.height(), rect2.y() + rect2.height());
+
+	  if (x1 <= x2 && y1 <= y2) {
+	    return SVG().rect(x2 - x1, y2 - y1).move(x1, y1);
+	  }
+
+	  return null;
+	}
+
+    generateButton.addEventListener('click', generate);
+    saveButton.addEventListener('click', saveSVG);
+
+    // Initial generation
+    generate();
+  </script>
+</body>
+</html>
